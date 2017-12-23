@@ -1,0 +1,85 @@
+---
+title: "Courseera Machine Learning Course Project"
+author: "Valeriu Prohnitchi"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+options( warn = -1 )
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Setting the working environment
+```{r echo=TRUE}
+library(rpart); library(rattle); library(caret); library(randomForest)
+```
+
+# Download the datasets
+```{r echo=TRUE}
+UrlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+UrlTest  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training <- read.csv(url(UrlTrain))
+testing  <- read.csv(url(UrlTest))
+```
+
+# Partitioning the training dataset 
+```{r echo=TRUE}
+inTrain  <- createDataPartition(training$classe, p=0.7, list=FALSE)
+TrainSet <- training[inTrain, ]
+TestSet  <- training[-inTrain, ]
+dim(TrainSet)
+```
+
+The data contain many NAs and many columns have low variance that should be removed in order to enhance the algorythms performance. For the same reason, the first 6 columns that are identification columns should be removed. We thus significantly reduce the data dimensions.
+# Cleaning the data
+```{r echo=TRUE}
+## removing columns with many NAs
+NAcol    <- sapply(TrainSet, function(x) mean(is.na(x))) > 0.95
+TrainSet <- TrainSet[, NAcol==FALSE]
+TestSet  <- TestSet[, NAcol==FALSE]
+## removing low-variance columnes
+zerocol <- nearZeroVar(TrainSet)
+TrainSet <- TrainSet[, -zerocol]
+TestSet  <- TestSet[, -zerocol]
+## removing unnecessary identification columns
+TrainSet <- TrainSet[, -(1:6)]
+TestSet  <- TestSet[, -(1:6)]
+dim(TrainSet); dim(TestSet)
+```
+
+Considering the type of the predicted variable (factor with 5 levels), we approach the problem with two algorythms: a classification one and a random forest one.
+# Classification tree model
+```{r echo=TRUE}
+set.seed(987)
+ClassTree <- rpart(classe ~ ., data=TrainSet, method="class")
+fancyRpartPlot(ClassTree,cex=.5,under.cex=1,shadow.offset=0)
+predictTree <- predict(ClassTree, newdata=TestSet, type="class")
+cmtree<-confusionMatrix(predictTree, TestSet$classe)
+cmtree
+```
+
+# Random forest model
+```{r echo=TRUE}
+set.seed(1475)
+Forest<-train(classe~., data=TrainSet, method="rf", trControl=trainControl(method="cv", number=3, verboseIter=FALSE))
+Forest$finalModel
+predictForest <- predict(Forest, newdata=TestSet)
+cmforest<-confusionMatrix(predictForest, TestSet$classe)
+cmforest
+```
+
+# Plotting the confusion matrices for the two methods
+A visual comparison of the performance of the two methods is helpful as it shows that the Random Forest method has a significantly higher accuracy as comapred with the classification tree method. 
+```{r echo=TRUE}
+par(mfrow=c(1,2))
+plot(cmtree$table, main=paste(c("Classific Tree Accuracy Rate=",round(cmtree$overall['Accuracy'],3))), col="red")
+plot(cmforest$table, main=paste(c("Random Forest Accuracy Rate=",round(cmforest$overall['Accuracy'],3))), col="green")
+```
+We thus choose the Random forest model for solving the quiz.
+
+# Answering the quiz
+```{r echo=TRUE}
+quiz <- predict(Forest, newdata=testing)
+quiz
+```
+
